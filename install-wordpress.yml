@@ -1,0 +1,86 @@
+- name: (re)Install clean Wordpress (in case of Apache and MySQL already exists)
+  hosts: all
+  become: true
+  become_user: root
+  become_method: sudo
+  gather_facts: false
+  ignore_errors: false
+
+  vars:
+
+    install_path: "/set/path/to/the/public_html"
+    db_name: "database_name_here"
+    db_user: "database_dbuser_name"
+    db_pass: "database_dbuser_password"
+    db_host: "localhost"
+
+  tasks:
+    - name: Generate random string for for the table prefix
+      shell: echo $RANDOM | md5sum | head -c 3
+      register: table_prefix
+
+    - name: Clean database | Get Table list from database
+      shell: |
+        mysql -u {{ db_user }} --password={{ db_pass }} -h {{ db_host }} {{ db_name }} -s -N \
+          -e "select table_name from information_schema.tables where table_schema = '{{ db_name }}' ;"
+      register: table_list
+
+    - name: Clean database | Drop all tables from database
+      shell: |
+        mysql -u {{ db_user }} --password={{ db_pass }} -h {{ db_host }} {{ db_name }} -s -N \
+          -e "set foreign_key_checks = 0 ; drop table if exists {{ item }}; "
+      with_items:  "{{  table_list.stdout_lines }}"
+
+    - name: Get stats of {{ install_path }}
+      stat:
+        path: "{{ install_path }}"
+      register: file_stat
+
+    - name: Delete {{ install_path }}
+      file:
+        path: "{{ install_path }}"
+        state: absent
+
+    - name: Create {{ install_path }}
+      file:
+        path: "{{ install_path }}"
+        state: directory
+        owner: "{{ file_stat.stat.pw_name }}"
+        group: "{{ file_stat.stat.gr_name }}"
+        mode: "{{ file_stat.stat.mode }}"
+
+    - name: Unarchive latest version of WordPress
+      unarchive:
+        src: https://wordpress.org/latest.tar.gz
+        dest: "{{ install_path }}"
+        remote_src: yes
+        owner: "{{ file_stat.stat.pw_name }}"
+        group: "{{ file_stat.stat.gr_name }}"
+
+    - name: Move files, remove trails and generate salts
+      shell: |
+        mv {{ install_path }}/wordpress/* "{{ install_path }}/" &>/dev/null
+        rmdir "{{ install_path }}/wordpress" &>/dev/null
+        curl https://api.wordpress.org/secret-key/1.1/salt
+      register: salts
+
+    - name: Template a wp-config.php
+      template:
+        src: files/wp-config.php.j2
+        dest: "{{ install_path }}/wp-config.php"
+        owner: "{{ file_stat.stat.pw_name }}"
+        group: "{{ file_stat.stat.gr_name }}"
+        mode: '0644'
+
+    - name: Delete unwanted plugins and themes
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ install_path }}/wp-content/plugins/akismet"
+        - "{{ install_path }}/wp-content/plugins/hello.php"
+        - "{{ install_path }}/wp-content/themes/twentytwentyone"
+        - "{{ install_path }}/wp-content/themes/twentytwentytwo"
+
+    - name: Start WordPress setup
+      debug: msg="With your browser go to -> http://{{ inventory_hostname }}/wp-admin"
