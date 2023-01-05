@@ -23,6 +23,8 @@ We assume that MySQL/MariaDB and web server software are already installed and i
     ansible-playbook -i hosts.ini install-wordpress.yml
 
 ## Author Information
-Darko Drazovic (InfraTeam) \
-Email: darko.drazovic@sap.com \
-LinkedIn: https://www.linkedin.com/in/darkodrazovic
+Darko Drazovic \
+LinkedIn: https://www.linkedin.com/in/darkodrazovic \
+Personal: https://darkodrazovic.in.rs \
+Blog: https://kompjuteras.com \
+GitHub: https://github.com/darkodrazovic
